@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Калькулятор окупаемости ASIC</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-dark text-white">
+    <div class="container py-4">
+        <h1 class="text-center mb-4">⛏️ Калькулятор майнинга Bitcoin</h1>
+        
+        <div class="row g-3 mb-4">
+            <div class="col-md-4">
+                <label class="form-label">Модель ASIC</label>
+                <select id="modelSelect" class="form-select">
+                    <option value="custom">Свои параметры</option>
+                    <option value="t21" selected>Antminer T21 (190 Th/s, 3610W)</option>
+                    <option value="s21">Antminer S21 (200 Th/s, 3500W)</option>
+                    <option value="s19">Antminer S19 XP (141 Th/s, 3010W)</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Хешрейт (Th/s)</label>
+                <input type="number" id="hashrate" class="form-control" value="190">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Потребление (Вт)</label>
+                <input type="number" id="power" class="form-control" value="3610">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Тариф ($/кВт·ч)</label>
+                <input type="number" id="electricity" class="form-control" value="0.06" step="0.01">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Цена устройства ($)</label>
+                <input type="number" id="devicePrice" class="form-control" value="1000">
+            </div>
+        </div>
+        
+        <button id="calculateBtn" class="btn btn-warning btn-lg w-100 mb-4">Рассчитать</button>
+        
+        <div class="row g-3 mb-4">
+            <div class="col-md-3">
+                <div class="card bg-success text-white">
+                    <div class="card-body text-center">
+                        <h6>Доход в сутки</h6>
+                        <h3 id="dailyIncome">$0.00</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-danger text-white">
+                    <div class="card-body text-center">
+                        <h6>Расход на ЭЭ в сутки</h6>
+                        <h3 id="dailyCost">$0.00</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-primary text-white">
+                    <div class="card-body text-center">
+                        <h6>Чистая прибыль в сутки</h6>
+                        <h3 id="dailyProfit">$0.00</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-info text-white">
+                    <div class="card-body text-center">
+                        <h6>Окупаемость</h6>
+                        <h3 id="roi">—</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <canvas id="profitChart" height="200"></canvas>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
