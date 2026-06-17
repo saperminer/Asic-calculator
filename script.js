@@ -1,4 +1,4 @@
-            document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function() {
     
     // Переключение моделей
     document.getElementById('modelSelect').addEventListener('change', function() {
@@ -20,7 +20,7 @@
     
     let chart = null;
     
-    // Функция fetch с таймаутом
+    // fetch с таймаутом
     async function fetchWithTimeout(url, timeout = 8000) {
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), timeout);
@@ -49,29 +49,35 @@
         calcBtn.textContent = '⏳ Загрузка данных сети...';
         
         try {
-            // 1. Получаем сложность сети через mempool.space (надёжнее)
-            const diffResponse = await fetchWithTimeout('https://mempool.space/api/v1/difficulty-adjustment');
-            const diffData = await diffResponse.json();
-            const difficulty = diffData.difficulty;   // текущая сложность
+            let btcPrice, dailyBTC;
             
-            // 2. Курс BTC (CoinGecko, при неудаче — CoinDesk)
-            let btcPrice;
+            // === Способ 1: WhatToMine (готовый доход) ===
             try {
-                const priceResponse = await fetchWithTimeout('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd');
+                const wtmResponse = await fetchWithTimeout('https://whattomine.com/coins/1.json');
+                const wtmData = await wtmResponse.json();
+                btcPrice = parseFloat(wtmData.exchange_rate);
+                // estimated_rewards — дневной доход в BTC за 1 TH/s
+                const rewardPerTH = parseFloat(wtmData.estimated_rewards);
+                dailyBTC = hashrate * rewardPerTH;  // умножаем на наш хешрейт
+            } catch (wtmError) {
+                // === Способ 2: Mempool + CoinGecko (запасной) ===
+                console.warn('WhatToMine недоступен, пробуем запасной метод');
+                const [diffResponse, priceResponse] = await Promise.all([
+                    fetchWithTimeout('https://mempool.space/api/v1/difficulty-adjustment'),
+                    fetchWithTimeout('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd')
+                ]);
+                const diffData = await diffResponse.json();
+                const difficulty = diffData.difficulty;
                 const priceData = await priceResponse.json();
                 btcPrice = priceData.bitcoin.usd;
-            } catch (e) {
-                const backup = await fetchWithTimeout('https://api.coindesk.com/v1/bpi/currentprice.json');
-                const backupData = await backup.json();
-                btcPrice = backupData.bpi.USD.rate_float;
+                
+                const blockSubsidy = 3.125;
+                const poolFee = 0.98;
+                dailyBTC = (hashrate * 1e12 * blockSubsidy * 86400 * poolFee) /
+                           (difficulty * Math.pow(2, 32));
             }
             
-            // Расчёт дневного дохода в BTC (правильная формула)
-            const blockSubsidy = 3.125;
-            const poolFee = 0.98;
-            const dailyBTC = (hashrate * 1e12 * blockSubsidy * 86400 * poolFee) /
-                             (difficulty * Math.pow(2, 32));
-            
+            // Расчёт дохода и прибыли
             const dailyIncome = dailyBTC * btcPrice;
             const dailyCost = (power / 1000) * 24 * tariff;
             const dailyProfit = dailyIncome - dailyCost;
@@ -85,7 +91,7 @@
                 roiText = '⚠️ Убыток';
             }
             
-            // Заполняем карточки
+            // Вывод в карточки
             document.getElementById('dailyIncome').textContent  = `$${dailyIncome.toFixed(2)}`;
             document.getElementById('dailyCost').textContent    = `$${dailyCost.toFixed(2)}`;
             document.getElementById('dailyProfit').textContent   = `$${dailyProfit.toFixed(2)}`;
@@ -96,13 +102,12 @@
             
         } catch (error) {
             console.error('Ошибка загрузки данных:', error);
-            alert('Не удалось загрузить данные сети.\nВозможно, отсутствует интернет или требуется VPN.\nПопробуйте позже.');
+            alert('Не удалось загрузить данные.\nВозможно, нет интернета или нужен VPN.\nПопробуйте позже.');
             document.getElementById('dailyIncome').textContent  = '$—';
             document.getElementById('dailyCost').textContent    = '$—';
             document.getElementById('dailyProfit').textContent   = '$—';
             document.getElementById('roi').textContent          = 'Ошибка';
         } finally {
-            // В любом случае возвращаем кнопку
             calcBtn.disabled = false;
             calcBtn.textContent = originalText;
         }
@@ -164,6 +169,6 @@
         });
     }
     
-    // Первый расчёт при загрузке страницы
+    // Автозапуск при загрузке
     calculate();
-});    
+});
