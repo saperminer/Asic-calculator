@@ -1,22 +1,56 @@
+/* Общие настройки */
 body {
-    background-color: #1a1a2e !important;
-    font-family: 'Segoe UI', sans-serif;
+    background-color: #f8f9fa;  /* светло-серый фон */
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    color: #212529;
 }
 
+/* Карточки */
 .card {
+    border-radius: 16px;
     border: none;
+    transition: transform 0.2s ease;
+}
+.card:hover {
+    transform: translateY(-2px);
+}
+
+/* Кнопка */
+.btn-primary {
+    background-color: #2563eb;  /* современный синий */
+    border: none;
+    font-weight: 600;
+    letter-spacing: 0.5px;
     border-radius: 12px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+}
+.btn-primary:hover {
+    background-color: #1d4ed8;
 }
 
-.btn-warning {
-    font-weight: bold;
-    letter-spacing: 1px;
-    border-radius: 10px;
+/* Тень для карточек */
+.shadow-sm {
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.05) !important;
 }
 
+/* График — небольшой отступ и скругление */
 canvas {
-    background: rgba(255,255,255,0.05);
-    border-radius: 12px;
-    padding: 10px;
+    border-radius: 8px;
+}
+
+/* Заголовки в карточках */
+.card h6 {
+    font-size: 0.8rem;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+}
+.card h3 {
+    font-weight: 700;
+}
+
+/* Адаптивность для мобильных */
+@media (max-width: 768px) {
+    .container {
+        padding-left: 16px;
+        padding-right: 16px;
+    }
 }
