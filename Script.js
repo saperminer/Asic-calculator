@@ -30,21 +30,22 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         try {
-            const [difficultyResponse, priceData] = await Promise.all([
-                fetch('https://mempool.space/api/v1/difficulty-adjustment').then(r => r.json()),
+            // Берём актуальную сложность сети и цену BTC
+            const [difficultyData, priceData] = await Promise.all([
+                fetch('https://blockchain.info/q/getdifficulty').then(r => r.json()),
                 fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd').then(r => r.json())
             ]);
             
-            const difficulty = 87200000000000;
+            const difficulty = difficultyData; // blockchain.info отдаёт число
             const btcPrice = priceData.bitcoin.usd;
             
             const blockSubsidy   = 3.125;
             const blocksPerDay   = 144;
             const poolFee        = 0.98;
             
-            const hashRateTH     = hashrate * 1000000000000;
-            const dailyBTC       = (hashRateTH * blockSubsidy * blocksPerDay * poolFee) / 
-                                   (difficulty * Math.pow(2, 32));
+            // Расчёт дневного дохода в BTC
+            const dailyBTC = (hashrate * 1e12 * blockSubsidy * blocksPerDay * poolFee) / 
+                             (difficulty * Math.pow(2, 32));
             const dailyIncome    = dailyBTC * btcPrice;
             
             const dailyCost      = (power / 1000) * 24 * tariff;
