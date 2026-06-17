@@ -4,92 +4,101 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Калькулятор окупаемости ASIC</title>
+    <!-- Bootstrap 5 -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- PWA-ready: manifest -->
-    <link rel="manifest" href="manifest.json">
+    <!-- Google Fonts (лёгкий современный шрифт) -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
-<body class="bg-dark text-white">
-    <div class="container py-4">
-        <h1 class="text-center mb-4">⛏️ Калькулятор майнинга Bitcoin</h1>
+<body>
+    <div class="container py-5">
+        <div class="text-center mb-5">
+            <h1 class="fw-bold">⛏️ Калькулятор майнинга Bitcoin</h1>
+            <p class="text-muted">Рассчитайте окупаемость ASIC‑майнера с учётом реальных данных сети</p>
+        </div>
         
-        <div class="row g-3 mb-4">
-            <div class="col-md-4">
-                <label class="form-label">Модель ASIC</label>
-                <select id="modelSelect" class="form-select">
-                    <option value="custom">Свои параметры</option>
-                    <option value="t21" selected>Antminer T21 (190 Th/s, 3610W)</option>
-                    <option value="s21">Antminer S21 (200 Th/s, 3500W)</option>
-                    <option value="s19">Antminer S19 XP (141 Th/s, 3010W)</option>
-                </select>
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">Хешрейт (Th/s)</label>
-                <input type="number" id="hashrate" class="form-control" value="190">
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">Потребление (Вт)</label>
-                <input type="number" id="power" class="form-control" value="3610">
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">Тариф ($/кВт·ч)</label>
-                <input type="number" id="electricity" class="form-control" value="0.06" step="0.01">
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">Цена устройства ($)</label>
-                <input type="number" id="devicePrice" class="form-control" value="1000">
+        <!-- Форма ввода -->
+        <div class="card shadow-sm mb-5">
+            <div class="card-body p-4">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label fw-semibold">Модель ASIC</label>
+                        <select id="modelSelect" class="form-select">
+                            <option value="custom">Свои параметры</option>
+                            <option value="t21" selected>Antminer T21 (190 Th/s, 3610W)</option>
+                            <option value="s21">Antminer S21 (200 Th/s, 3500W)</option>
+                            <option value="s19">Antminer S19 XP (141 Th/s, 3010W)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label fw-semibold">Хешрейт (Th/s)</label>
+                        <input type="number" id="hashrate" class="form-control" value="190">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label fw-semibold">Потребление (Вт)</label>
+                        <input type="number" id="power" class="form-control" value="3610">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label fw-semibold">Тариф ($/кВт·ч)</label>
+                        <input type="number" id="electricity" class="form-control" value="0.06" step="0.01">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label fw-semibold">Цена устройства ($)</label>
+                        <input type="number" id="devicePrice" class="form-control" value="1000">
+                    </div>
+                </div>
+                <button id="calculateBtn" class="btn btn-primary btn-lg w-100 mt-4">Рассчитать</button>
             </div>
         </div>
         
-        <button id="calculateBtn" class="btn btn-warning btn-lg w-100 mb-4">Рассчитать</button>
-        
-        <div class="row g-3 mb-4">
+        <!-- Карточки с результатами -->
+        <div class="row g-4 mb-5">
             <div class="col-md-3">
-                <div class="card bg-success text-white">
+                <div class="card border-success shadow-sm">
                     <div class="card-body text-center">
-                        <h6>Доход в сутки</h6>
-                        <h3 id="dailyIncome">$0.00</h3>
+                        <h6 class="text-success text-uppercase fw-semibold">Доход в сутки</h6>
+                        <h3 id="dailyIncome" class="mb-0">$0.00</h3>
                     </div>
                 </div>
             </div>
             <div class="col-md-3">
-                <div class="card bg-danger text-white">
+                <div class="card border-danger shadow-sm">
                     <div class="card-body text-center">
-                        <h6>Расход на ЭЭ в сутки</h6>
-                        <h3 id="dailyCost">$0.00</h3>
+                        <h6 class="text-danger text-uppercase fw-semibold">Расход на ЭЭ</h6>
+                        <h3 id="dailyCost" class="mb-0">$0.00</h3>
                     </div>
                 </div>
             </div>
             <div class="col-md-3">
-                <div class="card bg-primary text-white">
+                <div class="card border-primary shadow-sm">
                     <div class="card-body text-center">
-                        <h6>Чистая прибыль в сутки</h6>
-                        <h3 id="dailyProfit">$0.00</h3>
+                        <h6 class="text-primary text-uppercase fw-semibold">Чистая прибыль</h6>
+                        <h3 id="dailyProfit" class="mb-0">$0.00</h3>
                     </div>
                 </div>
             </div>
             <div class="col-md-3">
-                <div class="card bg-info text-white">
+                <div class="card border-info shadow-sm">
                     <div class="card-body text-center">
-                        <h6>Окупаемость</h6>
-                        <h3 id="roi">—</h3>
+                        <h6 class="text-info text-uppercase fw-semibold">Окупаемость</h6>
+                        <h3 id="roi" class="mb-0">—</h3>
                     </div>
                 </div>
             </div>
         </div>
         
-        <canvas id="profitChart" height="200"></canvas>
-        <p class="text-muted mt-3 text-center small">Данные обновляются при нажатии «Рассчитать». Прогноз с учётом роста сложности ~3% в месяц.</p>
+        <!-- График -->
+        <div class="card shadow-sm">
+            <div class="card-body p-4">
+                <canvas id="profitChart" height="200"></canvas>
+            </div>
+        </div>
+        <p class="text-muted text-center mt-3 small">Данные обновляются по кнопке «Рассчитать». Прогноз с учётом роста сложности ~3% в месяц.</p>
     </div>
     
+    <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <!-- Наш скрипт (без изменений) -->
     <script src="script.js"></script>
-    
-    <!-- Регистрация Service Worker для PWA -->
-    <script>
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('sw.js').catch(() => {});
-        }
-    </script>
 </body>
 </html>
