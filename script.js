@@ -1,6 +1,5 @@
 document.addEventListener('DOMContentLoaded', function() {
     
-    // Переключение моделей
     document.getElementById('modelSelect').addEventListener('change', function() {
         const models = {
             't21':   { hashrate: 190, power: 3610 },
@@ -20,17 +19,31 @@ document.addEventListener('DOMContentLoaded', function() {
     
     let chart = null;
     
-    // fetch с таймаутом
-    async function fetchWithTimeout(url, timeout = 8000) {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), timeout);
-        try {
-            const response = await fetch(url, { signal: controller.signal });
-            if (!response.ok) throw new Error(`Статус ${response.status}`);
-            return response;
-        } finally {
-            clearTimeout(timer);
+    // Список публичных CORS-прокси (порядок можно менять)
+    const CORS_PROXIES = [
+        'https://corsproxy.io/?',
+        'https://api.allorigins.win/raw?url=',
+        'https://api.codetabs.com/v1/proxy?quest='
+    ];
+    
+    // Функция запроса через прокси с перебором
+    async function fetchViaProxy(url, timeout = 10000) {
+        for (const proxy of CORS_PROXIES) {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), timeout);
+            try {
+                const response = await fetch(proxy + encodeURIComponent(url), {
+                    signal: controller.signal
+                });
+                clearTimeout(timer);
+                if (response.ok) return response;
+            } catch (e) {
+                // Этот прокси не сработал, пробуем следующий
+            } finally {
+                clearTimeout(timer);
+            }
         }
+        throw new Error('Все прокси недоступны');
     }
     
     async function calculate() {
@@ -46,25 +59,30 @@ document.addEventListener('DOMContentLoaded', function() {
         
         const originalText = calcBtn.textContent;
         calcBtn.disabled = true;
-        calcBtn.textContent = '⏳ Загрузка данных сети...';
+        calcBtn.textContent = '⏳ Загрузка данных...';
+        
+        // Сброс показателей
+        document.getElementById('dailyIncome').textContent  = '$—';
+        document.getElementById('dailyCost').textContent    = '$—';
+        document.getElementById('dailyProfit').textContent   = '$—';
+        document.getElementById('roi').textContent          = '—';
         
         try {
-            let btcPrice, dailyBTC;
+            let btcPrice = 0, dailyBTC = 0;
             
-            // === Способ 1: WhatToMine (готовый доход) ===
+            // 1. Пробуем WhatToMine через прокси (основной метод)
             try {
-                const wtmResponse = await fetchWithTimeout('https://whattomine.com/coins/1.json');
+                const wtmResponse = await fetchViaProxy('https://whattomine.com/coins/1.json');
                 const wtmData = await wtmResponse.json();
                 btcPrice = parseFloat(wtmData.exchange_rate);
-                // estimated_rewards — дневной доход в BTC за 1 TH/s
                 const rewardPerTH = parseFloat(wtmData.estimated_rewards);
-                dailyBTC = hashrate * rewardPerTH;  // умножаем на наш хешрейт
+                dailyBTC = hashrate * rewardPerTH;
             } catch (wtmError) {
-                // === Способ 2: Mempool + CoinGecko (запасной) ===
-                console.warn('WhatToMine недоступен, пробуем запасной метод');
+                // 2. Запасной метод: Mempool + CoinGecko также через прокси
+                console.warn('WhatToMine не сработал, пробуем запасной метод');
                 const [diffResponse, priceResponse] = await Promise.all([
-                    fetchWithTimeout('https://mempool.space/api/v1/difficulty-adjustment'),
-                    fetchWithTimeout('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd')
+                    fetchViaProxy('https://mempool.space/api/v1/difficulty-adjustment'),
+                    fetchViaProxy('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd')
                 ]);
                 const diffData = await diffResponse.json();
                 const difficulty = diffData.difficulty;
@@ -77,12 +95,15 @@ document.addEventListener('DOMContentLoaded', function() {
                            (difficulty * Math.pow(2, 32));
             }
             
-            // Расчёт дохода и прибыли
+            // Проверка на NaN
+            if (isNaN(btcPrice) || isNaN(dailyBTC) || btcPrice <= 0 || dailyBTC <= 0) {
+                throw new Error('Некорректные данные');
+            }
+            
             const dailyIncome = dailyBTC * btcPrice;
             const dailyCost = (power / 1000) * 24 * tariff;
             const dailyProfit = dailyIncome - dailyCost;
             
-            // Окупаемость
             let roiText = '—';
             if (dailyProfit > 0) {
                 const days = Math.ceil(price / dailyProfit);
@@ -91,22 +112,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 roiText = '⚠️ Убыток';
             }
             
-            // Вывод в карточки
             document.getElementById('dailyIncome').textContent  = `$${dailyIncome.toFixed(2)}`;
             document.getElementById('dailyCost').textContent    = `$${dailyCost.toFixed(2)}`;
             document.getElementById('dailyProfit').textContent   = `$${dailyProfit.toFixed(2)}`;
             document.getElementById('roi').textContent          = roiText;
             
-            // График
             drawChart(dailyProfit, price, tariff, power);
             
         } catch (error) {
-            console.error('Ошибка загрузки данных:', error);
-            alert('Не удалось загрузить данные.\nВозможно, нет интернета или нужен VPN.\nПопробуйте позже.');
-            document.getElementById('dailyIncome').textContent  = '$—';
-            document.getElementById('dailyCost').textContent    = '$—';
-            document.getElementById('dailyProfit').textContent   = '$—';
-            document.getElementById('roi').textContent          = 'Ошибка';
+            console.error('Ошибка:', error);
+            alert('Не удалось загрузить данные через прокси.\n' +
+                  'Возможно, все публичные прокси временно недоступны.\n' +
+                  'Попробуйте включить VPN / DPI-обход, чтобы прямые запросы заработали без CORS-блокировки.');
         } finally {
             calcBtn.disabled = false;
             calcBtn.textContent = originalText;
@@ -169,6 +186,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Автозапуск при загрузке
+    // Автозапуск
     calculate();
 });
