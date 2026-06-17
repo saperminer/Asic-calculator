@@ -14,7 +14,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    document.getElementById('calculateBtn').addEventListener('click', calculate);
+    const calcBtn = document.getElementById('calculateBtn');
+    calcBtn.addEventListener('click', calculate);
     
     let chart = null;
     
@@ -29,26 +30,27 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
+        const originalText = calcBtn.textContent;
+        calcBtn.disabled = true;
+        calcBtn.textContent = '⏳ Загрузка данных сети...';
+        
         try {
-            const [difficultyResponse, priceData] = await Promise.all([
+            const [difficulty, priceData] = await Promise.all([
                 fetch('https://blockchain.info/q/getdifficulty').then(r => r.json()),
                 fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd').then(r => r.json())
             ]);
             
-            const difficulty = difficultyResponse;
             const btcPrice = priceData.bitcoin.usd;
+            const blockSubsidy = 3.125;
+            const poolFee = 0.98;          // комиссия пула 2%
             
-            const blockSubsidy   = 3.125;
-            const blocksPerDay   = 144;
-            const poolFee        = 0.98;
+            // === ИСПРАВЛЕННАЯ ФОРМУЛА ===
+            const dailyBTC = (hashrate * 1e12 * blockSubsidy * 86400 * poolFee) /
+                             (difficulty * Math.pow(2, 32));
             
-            const hashRateTH     = hashrate * 1e12;
-            const dailyBTC       = (hashRateTH * blockSubsidy * blocksPerDay * poolFee) / 
-                                   (difficulty * Math.pow(2, 32));
-            const dailyIncome    = dailyBTC * btcPrice;
-            
-            const dailyCost      = (power / 1000) * 24 * tariff;
-            const dailyProfit    = dailyIncome - dailyCost;
+            const dailyIncome = dailyBTC * btcPrice;
+            const dailyCost = (power / 1000) * 24 * tariff;
+            const dailyProfit = dailyIncome - dailyCost;
             
             let roiText = '—';
             if (dailyProfit > 0) {
@@ -67,7 +69,14 @@ document.addEventListener('DOMContentLoaded', function() {
             
         } catch (error) {
             console.error('Ошибка:', error);
-            alert('Не удалось загрузить данные сети. Проверьте интернет.');
+            alert('Не удалось загрузить данные сети.\nВозможно, требуется VPN для доступа к API.');
+            document.getElementById('dailyIncome').textContent  = '$—';
+            document.getElementById('dailyCost').textContent    = '$—';
+            document.getElementById('dailyProfit').textContent   = '$—';
+            document.getElementById('roi').textContent          = 'Ошибка';
+        } finally {
+            calcBtn.disabled = false;
+            calcBtn.textContent = originalText;
         }
     }
     
@@ -99,16 +108,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     {
                         label: 'Накопленная прибыль ($)',
                         data: cumulative,
-                        borderColor: '#00ff88',
-                        backgroundColor: 'rgba(0,255,136,0.1)',
+                        borderColor: '#2563eb',
+                        backgroundColor: 'rgba(37,99,235,0.1)',
                         fill: true,
                         tension: 0.4
                     },
                     {
                         label: 'Накопленные затраты на ЭЭ ($)',
                         data: electricity,
-                        borderColor: '#ff4444',
-                        backgroundColor: 'rgba(255,68,68,0.1)',
+                        borderColor: '#dc3545',
+                        backgroundColor: 'rgba(220,53,69,0.1)',
                         fill: true,
                         tension: 0.4
                     }
@@ -117,11 +126,11 @@ document.addEventListener('DOMContentLoaded', function() {
             options: {
                 responsive: true,
                 plugins: {
-                    legend: { labels: { color: 'white' } }
+                    legend: { labels: { color: '#212529' } }
                 },
                 scales: {
-                    x: { ticks: { color: 'white' } },
-                    y: { ticks: { color: 'white' } }
+                    x: { ticks: { color: '#6c757d' } },
+                    y: { ticks: { color: '#6c757d' } }
                 }
             }
         });
