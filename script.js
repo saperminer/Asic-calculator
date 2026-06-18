@@ -36,6 +36,22 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // Обновление виджета курса BTC
+    async function updateBtcRate() {
+        try {
+            const resp = await fetchWithTimeout('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd,rub');
+            const data = await resp.json();
+            const usd = data.bitcoin.usd;
+            const rub = data.bitcoin.rub;
+            document.getElementById('btcUsd').textContent = '$' + usd.toLocaleString();
+            document.getElementById('btcRub').textContent = '₽' + rub.toLocaleString();
+        } catch (e) {
+            console.warn('Не удалось обновить курс BTC:', e.message);
+            document.getElementById('btcUsd').textContent = '$—';
+            document.getElementById('btcRub').textContent = '₽—';
+        }
+    }
+
     async function calculate() {
         const hashrate  = parseFloat(document.getElementById('hashrate').value);
         const power     = parseFloat(document.getElementById('power').value);
@@ -67,7 +83,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const rewardPerTH = parseFloat(data.estimated_rewards);
                 dailyBTC = hashrate * rewardPerTH;
             } catch (wtmError) {
-                // 2. Запасной: Mempool (правильный парсинг массива) + CoinGecko
+                // 2. Запасной: Mempool + CoinGecko
                 const [diffResp, priceResp] = await Promise.all([
                     fetchWithTimeout('https://mempool.space/api/blocks/tip'),
                     fetchWithTimeout('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd')
@@ -76,7 +92,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 const diffData = await diffResp.json();
                 const priceData = await priceResp.json();
 
-                // Mempool возвращает массив блоков, берём сложность из первого
                 if (!Array.isArray(diffData) || diffData.length === 0 || !diffData[0].difficulty) {
                     throw new Error('Mempool не вернул difficulty в массиве');
                 }
@@ -113,6 +128,9 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('roi').textContent          = roiText;
 
             drawChart(dailyProfit, price, tariff, power);
+
+            // Обновляем курс после успешного расчёта
+            updateBtcRate();
 
         } catch (error) {
             console.error(error);
@@ -179,5 +197,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // Первичная загрузка
+    updateBtcRate();
     calculate();
 });
