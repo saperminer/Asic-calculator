@@ -59,7 +59,7 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             let btcPrice, dailyBTC;
 
-            // 1. Пробуем WhatToMine (может не работать из-за CORS)
+            // 1. Пробуем WhatToMine (вероятно, не сработает из-за CORS)
             try {
                 const resp = await fetchWithTimeout('https://whattomine.com/coins/1.json');
                 const data = await resp.json();
@@ -67,7 +67,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 const rewardPerTH = parseFloat(data.estimated_rewards);
                 dailyBTC = hashrate * rewardPerTH;
             } catch (wtmError) {
-                // 2. Запасной: Mempool (правильный endpoint) + CoinGecko
+                // 2. Запасной: Mempool (правильный парсинг массива) + CoinGecko
                 const [diffResp, priceResp] = await Promise.all([
                     fetchWithTimeout('https://mempool.space/api/blocks/tip'),
                     fetchWithTimeout('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd')
@@ -76,11 +76,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 const diffData = await diffResp.json();
                 const priceData = await priceResp.json();
 
-                if (!diffData.difficulty) throw new Error('Mempool не вернул difficulty');
+                // Mempool возвращает массив блоков, берём сложность из первого
+                if (!Array.isArray(diffData) || diffData.length === 0 || !diffData[0].difficulty) {
+                    throw new Error('Mempool не вернул difficulty в массиве');
+                }
+                const difficulty = diffData[0].difficulty;
+
                 btcPrice = priceData.bitcoin?.usd;
                 if (!btcPrice) throw new Error('CoinGecko не вернул курс');
 
-                const difficulty = diffData.difficulty;
                 const blockSubsidy = 3.125;
                 const poolFee = 0.98;
                 dailyBTC = (hashrate * 1e12 * blockSubsidy * 86400 * poolFee) /
