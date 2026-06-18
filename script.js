@@ -126,7 +126,117 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('dailyCost').textContent    = `$${dailyCost.toFixed(2)}`;
             document.getElementById('dailyProfit').textContent   = `$${dailyProfit.toFixed(2)}`;
             document.getElementById('roi').textContent          = roiText;
+// Обновление сетевых показателей
+async function updateNetworkStats() {
+    try {
+        const [hashResp, diffResp] = await Promise.all([
+            fetchWithTimeout('https://mempool.space/api/v1/hashrate/pool/3d'),
+            fetchWithTimeout('https://mempool.space/api/v1/difficulty-adjustment')
+        ]);
+        const hashData = await hashResp.json();
+        const diffData = await diffResp.json();
 
+        // Хешрейт сети в EH/s (mempool даёт хешрейт в H/s, переводим)
+        const hashrateEH = (hashData.hashrate / 1e18).toFixed(2);
+        document.getElementById('networkHashrate').textContent = hashrateEH + ' EH/s';
+
+        // Сложность в триллионах (T)
+        const difficultyT = (diffData.difficulty / 1e12).toFixed(2);
+        document.getElementById('networkDifficulty').textContent = difficultyT + ' T';
+
+        // Строим графики с теми же данными (если нужно, можем загрузить историю)
+        await drawDifficultyChart();
+        await drawHashrateChart();
+    } catch (e) {
+        console.warn('Не удалось обновить сетевые показатели:', e.message);
+        document.getElementById('networkHashrate').textContent = '—';
+        document.getElementById('networkDifficulty').textContent = '—';
+    }
+}
+
+// График сложности за 12 месяцев (используем историю из mempool)
+async function drawDifficultyChart() {
+    try {
+        const resp = await fetchWithTimeout('https://mempool.space/api/v1/difficulty/history?range=12m');
+        const data = await resp.json();
+        const ctx = document.getElementById('difficultyChart').getContext('2d');
+        if (window.difficultyChartInstance) window.difficultyChartInstance.destroy();
+
+        const labels = data.map(p => {
+            const d = new Date(p.time * 1000);
+            return d.toLocaleDateString('ru', { month: 'short', year: '2-digit' });
+        });
+        const values = data.map(p => p.difficulty / 1e12); // в Т
+
+        window.difficultyChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [{
+                    label: 'Сложность (T)',
+                    data: values,
+                    borderColor: '#f59e0b',
+                    backgroundColor: 'rgba(245,158,11,0.1)',
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { ticks: { color: '#6c757d', maxTicksLimit: 6 } },
+                    y: { ticks: { color: '#6c757d' } }
+                }
+            }
+        });
+    } catch (e) {
+        console.warn('Не удалось построить график сложности:', e.message);
+    }
+}
+
+// График хешрейта за 3 месяца
+async function drawHashrateChart() {
+    try {
+        const resp = await fetchWithTimeout('https://mempool.space/api/v1/hashrate/pool/3m');
+        const data = await resp.json();
+        const ctx = document.getElementById('hashrateChart').getContext('2d');
+        if (window.hashrateChartInstance) window.hashrateChartInstance.destroy();
+
+        const labels = data.map(p => {
+            const d = new Date(p.timestamp * 1000);
+            return d.toLocaleDateString('ru', { month: 'short', year: '2-digit' });
+        });
+        const values = data.map(p => p.avgHashrate / 1e18); // EH/s
+
+        window.hashrateChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [{
+                    label: 'Хешрейт (EH/s)',
+                    data: values,
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16,185,129,0.1)',
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { ticks: { color: '#6c757d', maxTicksLimit: 6 } },
+                    y: { ticks: { color: '#6c757d' } }
+                }
+            }
+        });
+    } catch (e) {
+        console.warn('Не удалось построить график хешрейта:', e.message);
+    }
+                                                                                           }
             drawChart(dailyProfit, price, tariff, power);
 
             // Обновляем курс после успешного расчёта
