@@ -1,5 +1,6 @@
 document.addEventListener('DOMContentLoaded', function() {
 
+    // Переключение моделей
     document.getElementById('modelSelect').addEventListener('change', function() {
         const models = {
             't21':   { hashrate: 190, power: 3610 },
@@ -21,6 +22,7 @@ document.addEventListener('DOMContentLoaded', function() {
     window.difficultyChartInstance = null;
     window.hashrateChartInstance = null;
 
+    // Запрос с таймаутом
     function fetchWithTimeout(url, timeout = 8000) {
         return new Promise((resolve, reject) => {
             const timer = setTimeout(() => reject(new Error('Таймаут')), timeout);
@@ -37,6 +39,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // Обновление виджета курса BTC
     async function updateBtcRate() {
         try {
             const resp = await fetchWithTimeout('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd,rub');
@@ -50,7 +53,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Получение сложности и вычисление хешрейта сети
+    // Получение сложности и вычисление хешрейта сети из blocks/tip
     async function getNetworkData() {
         const resp = await fetchWithTimeout('https://mempool.space/api/blocks/tip');
         const data = await resp.json();
@@ -87,7 +90,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Построение прогнозных графиков
+    // Построение прогнозных графиков сложности и хешрейта
     function drawForecastCharts(currentDiff, currentHashrate, growthPercent) {
         const months = 12;
         const labels = [];
@@ -162,6 +165,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    // Основная функция расчёта
     async function calculate() {
         const hashrate  = parseFloat(document.getElementById('hashrate').value);
         const power     = parseFloat(document.getElementById('power').value);
@@ -177,15 +181,16 @@ document.addEventListener('DOMContentLoaded', function() {
         calcBtn.disabled = true;
         calcBtn.textContent = '⏳ Загрузка данных...';
 
-        document.getElementById('dailyIncome').textContent  = '$—';
-        document.getElementById('dailyCost').textContent    = '$—';
-        document.getElementById('dailyProfit').textContent   = '$—';
+        // Сброс значений
+        document.getElementById('monthlyIncome').textContent  = '$—';
+        document.getElementById('monthlyCost').textContent    = '$—';
+        document.getElementById('monthlyProfit').textContent   = '$—';
         document.getElementById('roi').textContent          = '—';
 
         try {
             let btcPrice, dailyBTC;
 
-            // 1. Пробуем WhatToMine
+            // 1. Пробуем WhatToMine (может не работать из-за CORS)
             try {
                 const resp = await fetchWithTimeout('https://whattomine.com/coins/1.json');
                 const data = await resp.json();
@@ -210,39 +215,54 @@ document.addEventListener('DOMContentLoaded', function() {
                 throw new Error('Некорректные данные');
             }
 
-            const dailyIncome = dailyBTC * btcPrice;
-            const dailyCost = (power / 1000) * 24 * tariff;
-            const dailyProfit = dailyIncome - dailyCost;
+            // Месячные значения
+            const monthlyIncome = dailyBTC * btcPrice * 30;
+            const monthlyCost = (power / 1000) * 24 * tariff * 30;
+            const monthlyProfit = monthlyIncome - monthlyCost;
 
+            // Окупаемость в удобном формате
             let roiText = '—';
-            if (dailyProfit > 0) {
-                const days = Math.ceil(price / dailyProfit);
-                roiText = days < 365 ? `${days} дн.` : `${(days/365).toFixed(1)} лет`;
+            if (monthlyProfit > 0) {
+                const months = price / monthlyProfit;
+                if (months < 1) {
+                    roiText = Math.ceil(months * 30) + ' дн.';
+                } else if (months <= 12) {
+                    roiText = months.toFixed(1) + ' мес.';
+                } else {
+                    roiText = (months / 12).toFixed(1) + ' лет';
+                }
             } else {
                 roiText = '⚠️ Убыток';
             }
 
-            document.getElementById('dailyIncome').textContent  = `$${dailyIncome.toFixed(2)}`;
-            document.getElementById('dailyCost').textContent    = `$${dailyCost.toFixed(2)}`;
-            document.getElementById('dailyProfit').textContent   = `$${dailyProfit.toFixed(2)}`;
+            // Заполняем карточки
+            document.getElementById('monthlyIncome').textContent  = `$${monthlyIncome.toFixed(2)}`;
+            document.getElementById('monthlyCost').textContent    = `$${monthlyCost.toFixed(2)}`;
+            document.getElementById('monthlyProfit').textContent   = `$${monthlyProfit.toFixed(2)}`;
             document.getElementById('roi').textContent          = roiText;
 
-            drawChart(dailyProfit, price, tariff, power);
+            // График окупаемости (использует месячную прибыль)
+            drawProfitChart(monthlyProfit, price, tariff, power);
 
-            // Сначала сеть с прогнозом, потом курс
+            // Сначала сетевые показатели с прогнозом, потом курс BTC
             await updateNetworkStats();
             updateBtcRate();
 
         } catch (error) {
             console.error(error);
             alert('Ошибка: ' + error.message + '\n\nПроверьте интернет и обход DPI.');
+            document.getElementById('monthlyIncome').textContent  = '$—';
+            document.getElementById('monthlyCost').textContent    = '$—';
+            document.getElementById('monthlyProfit').textContent   = '$—';
+            document.getElementById('roi').textContent          = 'Ошибка';
         } finally {
             calcBtn.disabled = false;
             calcBtn.textContent = originalText;
         }
     }
 
-    function drawChart(dailyProfit, price, tariff, power) {
+    // График окупаемости (накопленная прибыль против затрат)
+    function drawProfitChart(monthlyProfit, price, tariff, power) {
         const ctx = document.getElementById('profitChart').getContext('2d');
         if (chart) chart.destroy();
 
@@ -254,9 +274,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
         for (let i = 0; i <= months; i++) {
             labels.push(i === 0 ? 'Старт' : `${i} мес`);
-            const decay = Math.pow(0.97, i);
-            const monthlyProfit = dailyProfit * decay * 30;
-            total += monthlyProfit;
+            const decay = Math.pow(0.97, i);   // снижение дохода из-за роста сложности
+            const currentMonthlyProfit = monthlyProfit * decay;
+            total += currentMonthlyProfit;
             cumulative.push(parseFloat(total.toFixed(0)));
             const monthlyCost = (power / 1000) * 24 * tariff * 30;
             electricity.push(parseFloat((monthlyCost * (i+1)).toFixed(0)));
