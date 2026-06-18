@@ -18,8 +18,9 @@ document.addEventListener('DOMContentLoaded', function() {
     calcBtn.addEventListener('click', calculate);
 
     let chart = null;
+    window.difficultyChartInstance = null;
+    window.hashrateChartInstance = null;
 
-    // Запрос с таймаутом
     function fetchWithTimeout(url, timeout = 8000) {
         return new Promise((resolve, reject) => {
             const timer = setTimeout(() => reject(new Error('Таймаут')), timeout);
@@ -36,132 +37,129 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Обновление виджета курса BTC
     async function updateBtcRate() {
         try {
             const resp = await fetchWithTimeout('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd,rub');
             const data = await resp.json();
-            const usd = data.bitcoin.usd;
-            const rub = data.bitcoin.rub;
-            document.getElementById('btcUsd').textContent = '$' + usd.toLocaleString();
-            document.getElementById('btcRub').textContent = '₽' + rub.toLocaleString();
+            document.getElementById('btcUsd').textContent = '$' + data.bitcoin.usd.toLocaleString();
+            document.getElementById('btcRub').textContent = '₽' + data.bitcoin.rub.toLocaleString();
         } catch (e) {
-            console.warn('Не удалось обновить курс BTC:', e.message);
+            console.warn('Курс BTC не обновлён:', e.message);
             document.getElementById('btcUsd').textContent = '$—';
             document.getElementById('btcRub').textContent = '₽—';
         }
     }
 
-    // Обновление сетевых показателей и графиков
+    // Получение сложности и вычисление хешрейта сети
+    async function getNetworkData() {
+        const resp = await fetchWithTimeout('https://mempool.space/api/blocks/tip');
+        const data = await resp.json();
+        if (!Array.isArray(data) || data.length === 0 || !data[0].difficulty) {
+            throw new Error('Не удалось получить сложность');
+        }
+        const difficulty = data[0].difficulty;
+        // Хешрейт сети = difficulty * 2^32 / 600 (H/s)
+        const hashrateH = difficulty * Math.pow(2, 32) / 600;
+        return { difficulty, hashrateH };
+    }
+
+    // Обновление карточек сети и графиков прогноза
     async function updateNetworkStats() {
         try {
-            const [hashResp, diffResp] = await Promise.all([
-                fetchWithTimeout('https://mempool.space/api/v1/hashrate/pool/3d'),
-                fetchWithTimeout('https://mempool.space/api/v1/difficulty-adjustment')
-            ]);
-            const hashData = await hashResp.json();
-            const diffData = await diffResp.json();
+            const { difficulty, hashrateH } = await getNetworkData();
 
-            // Хешрейт сети в EH/s
-            const hashrateEH = (hashData.hashrate / 1e18).toFixed(2);
-            document.getElementById('networkHashrate').textContent = hashrateEH + ' EH/s';
+            // Хешрейт в EH/s
+            const hrEH = (hashrateH / 1e18).toFixed(2);
+            document.getElementById('networkHashrate').textContent = hrEH + ' EH/s';
 
-            // Сложность в триллионах (T)
-            const difficultyT = (diffData.difficulty / 1e12).toFixed(2);
-            document.getElementById('networkDifficulty').textContent = difficultyT + ' T';
+            // Сложность в Т
+            const diffT = (difficulty / 1e12).toFixed(2);
+            document.getElementById('networkDifficulty').textContent = diffT + ' T';
 
-            // Строим графики
-            await drawDifficultyChart();
-            await drawHashrateChart();
+            // Прогнозные графики
+            const growthPercent = parseFloat(document.getElementById('diffGrowth').value) || 3;
+            drawForecastCharts(difficulty, hashrateH, growthPercent);
+
         } catch (e) {
-            console.warn('Не удалось обновить сетевые показатели:', e.message);
+            console.warn('Сетевые показатели не обновлены:', e.message);
             document.getElementById('networkHashrate').textContent = '—';
             document.getElementById('networkDifficulty').textContent = '—';
         }
     }
 
-    // График сложности за 12 месяцев
-    async function drawDifficultyChart() {
-        try {
-            const resp = await fetchWithTimeout('https://mempool.space/api/v1/difficulty/history?range=12m');
-            const data = await resp.json();
-            const ctx = document.getElementById('difficultyChart').getContext('2d');
-            if (window.difficultyChartInstance) window.difficultyChartInstance.destroy();
+    // Построение прогнозных графиков
+    function drawForecastCharts(currentDiff, currentHashrate, growthPercent) {
+        const months = 12;
+        const labels = [];
+        const diffValues = [];
+        const hrValues = [];
+        const growthFactor = 1 + growthPercent / 100;
 
-            const labels = data.map(p => {
-                const d = new Date(p.time * 1000);
-                return d.toLocaleDateString('ru', { month: 'short', year: '2-digit' });
-            });
-            const values = data.map(p => p.difficulty / 1e12); // в Т
-
-            window.difficultyChartInstance = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels,
-                    datasets: [{
-                        label: 'Сложность (T)',
-                        data: values,
-                        borderColor: '#f59e0b',
-                        backgroundColor: 'rgba(245,158,11,0.1)',
-                        fill: true,
-                        tension: 0.3,
-                        pointRadius: 0
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        x: { ticks: { color: '#6c757d', maxTicksLimit: 6 } },
-                        y: { ticks: { color: '#6c757d' } }
-                    }
-                }
-            });
-        } catch (e) {
-            console.warn('Не удалось построить график сложности:', e.message);
+        let diff = currentDiff;
+        let hr = currentHashrate;
+        for (let i = 0; i <= months; i++) {
+            const date = new Date();
+            date.setMonth(date.getMonth() + i);
+            labels.push(date.toLocaleDateString('ru', { month: 'short', year: '2-digit' }));
+            diffValues.push(diff / 1e12); // в Т
+            hrValues.push(hr / 1e18);     // в EH/s
+            diff *= growthFactor;
+            hr *= growthFactor;
         }
-    }
 
-    // График хешрейта за 3 месяца
-    async function drawHashrateChart() {
-        try {
-            const resp = await fetchWithTimeout('https://mempool.space/api/v1/hashrate/pool/3m');
-            const data = await resp.json();
-            const ctx = document.getElementById('hashrateChart').getContext('2d');
-            if (window.hashrateChartInstance) window.hashrateChartInstance.destroy();
-
-            const labels = data.map(p => {
-                const d = new Date(p.timestamp * 1000);
-                return d.toLocaleDateString('ru', { month: 'short', year: '2-digit' });
-            });
-            const values = data.map(p => p.avgHashrate / 1e18); // EH/s
-
-            window.hashrateChartInstance = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels,
-                    datasets: [{
-                        label: 'Хешрейт (EH/s)',
-                        data: values,
-                        borderColor: '#10b981',
-                        backgroundColor: 'rgba(16,185,129,0.1)',
-                        fill: true,
-                        tension: 0.3,
-                        pointRadius: 0
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: { legend: { display: false } },
-                    scales: {
-                        x: { ticks: { color: '#6c757d', maxTicksLimit: 6 } },
-                        y: { ticks: { color: '#6c757d' } }
-                    }
+        // График сложности
+        const diffCtx = document.getElementById('difficultyChart').getContext('2d');
+        if (window.difficultyChartInstance) window.difficultyChartInstance.destroy();
+        window.difficultyChartInstance = new Chart(diffCtx, {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [{
+                    label: 'Сложность (T)',
+                    data: diffValues,
+                    borderColor: '#f59e0b',
+                    backgroundColor: 'rgba(245,158,11,0.1)',
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { ticks: { color: '#6c757d', maxTicksLimit: 6 } },
+                    y: { ticks: { color: '#6c757d' } }
                 }
-            });
-        } catch (e) {
-            console.warn('Не удалось построить график хешрейта:', e.message);
-        }
+            }
+        });
+
+        // График хешрейта
+        const hrCtx = document.getElementById('hashrateChart').getContext('2d');
+        if (window.hashrateChartInstance) window.hashrateChartInstance.destroy();
+        window.hashrateChartInstance = new Chart(hrCtx, {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [{
+                    label: 'Хешрейт (EH/s)',
+                    data: hrValues,
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16,185,129,0.1)',
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { ticks: { color: '#6c757d', maxTicksLimit: 6 } },
+                    y: { ticks: { color: '#6c757d' } }
+                }
+            }
+        });
     }
 
     async function calculate() {
@@ -187,7 +185,7 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             let btcPrice, dailyBTC;
 
-            // 1. Пробуем WhatToMine (вероятно, не сработает из-за CORS)
+            // 1. Пробуем WhatToMine
             try {
                 const resp = await fetchWithTimeout('https://whattomine.com/coins/1.json');
                 const data = await resp.json();
@@ -195,20 +193,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 const rewardPerTH = parseFloat(data.estimated_rewards);
                 dailyBTC = hashrate * rewardPerTH;
             } catch (wtmError) {
-                // 2. Запасной: Mempool + CoinGecko
-                const [diffResp, priceResp] = await Promise.all([
-                    fetchWithTimeout('https://mempool.space/api/blocks/tip'),
-                    fetchWithTimeout('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd')
-                ]);
-
-                const diffData = await diffResp.json();
+                // 2. Запасной: наша сложность + CoinGecko
+                const { difficulty } = await getNetworkData();
+                const priceResp = await fetchWithTimeout('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd');
                 const priceData = await priceResp.json();
-
-                if (!Array.isArray(diffData) || diffData.length === 0 || !diffData[0].difficulty) {
-                    throw new Error('Mempool не вернул difficulty в массиве');
-                }
-                const difficulty = diffData[0].difficulty;
-
                 btcPrice = priceData.bitcoin?.usd;
                 if (!btcPrice) throw new Error('CoinGecko не вернул курс');
 
@@ -241,7 +229,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             drawChart(dailyProfit, price, tariff, power);
 
-            // Сначала сетевые показатели, потом курс
+            // Сначала сеть с прогнозом, потом курс
             await updateNetworkStats();
             updateBtcRate();
 
