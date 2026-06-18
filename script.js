@@ -19,8 +19,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     let chart = null;
 
-    // Прямой запрос с таймаутом 12 секунд
-    function fetchWithTimeout(url, timeout = 12000) {
+    // Запрос с таймаутом
+    function fetchWithTimeout(url, timeout = 8000) {
         return new Promise((resolve, reject) => {
             const timer = setTimeout(() => reject(new Error('Таймаут')), timeout);
             fetch(url)
@@ -51,49 +51,44 @@ document.addEventListener('DOMContentLoaded', function() {
         calcBtn.disabled = true;
         calcBtn.textContent = '⏳ Загрузка данных...';
 
-        // Сброс
         document.getElementById('dailyIncome').textContent  = '$—';
         document.getElementById('dailyCost').textContent    = '$—';
         document.getElementById('dailyProfit').textContent   = '$—';
         document.getElementById('roi').textContent          = '—';
 
         try {
-            let btcPrice = 0, dailyBTC = 0;
+            let btcPrice, dailyBTC;
 
-            // 1. Основной: WhatToMine
+            // 1. Пробуем WhatToMine (может не работать из-за CORS)
             try {
                 const resp = await fetchWithTimeout('https://whattomine.com/coins/1.json');
                 const data = await resp.json();
                 btcPrice = parseFloat(data.exchange_rate);
                 const rewardPerTH = parseFloat(data.estimated_rewards);
                 dailyBTC = hashrate * rewardPerTH;
-            } catch (e) {
-                // 2. Запасной: Mempool + CoinGecko
-                console.warn('WhatToMine ошибка:', e.message);
-                try {
-                    const [diffResp, priceResp] = await Promise.all([
-                        fetchWithTimeout('https://mempool.space/api/v1/difficulty-adjustment'),
-                        fetchWithTimeout('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd')
-                    ]);
-                    const diffData = await diffResp.json();
-                    const priceData = await priceResp.json();
+            } catch (wtmError) {
+                // 2. Запасной: Mempool (правильный endpoint) + CoinGecko
+                const [diffResp, priceResp] = await Promise.all([
+                    fetchWithTimeout('https://mempool.space/api/blocks/tip'),
+                    fetchWithTimeout('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd')
+                ]);
 
-                    if (!diffData.difficulty) throw new Error('Mempool не вернул difficulty');
-                    btcPrice = priceData.bitcoin?.usd;
-                    if (!btcPrice) throw new Error('CoinGecko не вернул курс');
+                const diffData = await diffResp.json();
+                const priceData = await priceResp.json();
 
-                    const difficulty = diffData.difficulty;
-                    const blockSubsidy = 3.125;
-                    const poolFee = 0.98;
-                    dailyBTC = (hashrate * 1e12 * blockSubsidy * 86400 * poolFee) /
-                               (difficulty * Math.pow(2, 32));
-                } catch (e2) {
-                    throw new Error('Запасной метод: ' + e2.message);
-                }
+                if (!diffData.difficulty) throw new Error('Mempool не вернул difficulty');
+                btcPrice = priceData.bitcoin?.usd;
+                if (!btcPrice) throw new Error('CoinGecko не вернул курс');
+
+                const difficulty = diffData.difficulty;
+                const blockSubsidy = 3.125;
+                const poolFee = 0.98;
+                dailyBTC = (hashrate * 1e12 * blockSubsidy * 86400 * poolFee) /
+                           (difficulty * Math.pow(2, 32));
             }
 
             if (isNaN(btcPrice) || isNaN(dailyBTC) || btcPrice <= 0 || dailyBTC <= 0) {
-                throw new Error('Получены некорректные числа: курс=' + btcPrice + ' доход=' + dailyBTC);
+                throw new Error('Некорректные данные');
             }
 
             const dailyIncome = dailyBTC * btcPrice;
@@ -117,7 +112,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         } catch (error) {
             console.error(error);
-            alert('Не удалось загрузить.\n' + error.message + '\n\nУбедитесь, что ByeDPI включён и ссылки работают.');
+            alert('Ошибка: ' + error.message + '\n\nПроверьте интернет и обход DPI.');
         } finally {
             calcBtn.disabled = false;
             calcBtn.textContent = originalText;
