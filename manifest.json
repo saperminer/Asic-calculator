@@ -1,21 +1,13 @@
 {
-  "name": "Калькулятор окупаемости ASIC",
-  "short_name": "ASIC Calc",
-  "description": "Расчёт окупаемости ASIC-майнеров для Bitcoin",
-  "start_url": "/asic-calculator/",
+  "background_color": "#000000",
+  "dir": "ltr",
   "display": "standalone",
-  "background_color": "#f8f9fa",
-  "theme_color": "#2563eb",
-  "icons": [
-    {
-      "src": "icons/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "icons/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png"
-    }
-  ]
+  "name": "saperminer.github",
+  "orientation": "any",
+  "scope": "/",
+  "short_name": "saperminer.github",
+  "start_url": "/",
+  "theme_color": "#b9ceb1",
+  "id": "saperminer.github",
+  "description": "Ejjxhhfj"
 }
